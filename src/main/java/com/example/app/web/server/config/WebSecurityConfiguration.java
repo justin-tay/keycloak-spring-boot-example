@@ -49,6 +49,8 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.KeySourceException;
+import com.nimbusds.jose.jwk.Curve;
+import com.nimbusds.jose.jwk.ECKey;
 import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.JWKSelector;
 import com.nimbusds.jose.jwk.JWKSet;
@@ -138,15 +140,23 @@ public class WebSecurityConfiguration {
 				DefaultJWTProcessor<SecurityContext> jwtProcessor = new DefaultJWTProcessor<>();
 				JWSVerificationKeySelector<SecurityContext> jwsKeySelector;
 				JWKSource<SecurityContext> jwkSource = jwkSource(clientRegistration);
-				jwsKeySelector = new JWSVerificationKeySelector<>(JWSAlgorithm.RS256, new JWKSource<SecurityContext>() {
-					@Override
-					public List<JWK> get(JWKSelector jwkSelector, SecurityContext context) throws KeySourceException {
-						List<JWK> jwk = jwkSource.get(jwkSelector, context);
-						return jwk.stream().filter(key -> {
-							return KeyUse.SIGNATURE.equals(key.getKeyUse());
-						}).toList();
-					}
-				});
+				jwsKeySelector = new JWSVerificationKeySelector<>(JWSAlgorithm.ES256K,
+						new JWKSource<SecurityContext>() {
+							@Override
+							public List<JWK> get(JWKSelector jwkSelector, SecurityContext context)
+									throws KeySourceException {
+								List<JWK> jwk = jwkSource.get(jwkSelector, context);
+								return jwk.stream().filter(key -> {
+									if (key instanceof ECKey ecKey) {
+										if (Curve.SECP256K1.equals(ecKey.getCurve())) {
+											// The actual keys don't specific alg but only specify crv
+											return true;
+										}
+									}
+									return false;
+								}).toList();
+							}
+						});
 				jwtProcessor.setJWSKeySelector(jwsKeySelector);
 				return new NimbusJwtDecoder(jwtProcessor);
 			});
